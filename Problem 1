@@ -1,0 +1,150 @@
+git clone https://github.com/nyrahul/wisecow.git
+cd wisecow
+# Use an official Python runtime as a parent image
+FROM python:3.9-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY . /app
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Define environment variable
+ENV NAME Wisecow
+
+# Run app.py when the container launches
+CMD ["python", "app.py"]
+docker build -t wisecow .
+docker run -p 4000:80 wisecow
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wisecow-deployment
+  labels:
+    app: wisecow
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wisecow
+  template:
+    metadata:
+      labels:
+        app: wisecow
+    spec:
+      containers:
+      - name: wisecow
+        image: <your-docker-registry>/wisecow:latest
+        ports:
+        - containerPort: 80
+apiVersion: v1
+kind: Service
+metadata:
+  name: wisecow-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: wisecow
+kubectl apply -f k8s/
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      run: |
+        docker buildx build --push --tag ${{ secrets.DOCKER_USERNAME }}/wisecow:latest .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v1
+      with:
+        version: 'v1.18.0'
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/
+      env:
+        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+kubectl create secret tls wisecow-tls --cert=path/to/tls.crt --key=path/to/tls.key
+apiVersion: v1
+kind: Service
+metadata:
+  name: wisecow-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 443
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: wisecow
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wisecow-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - yourdomain.com
+    secretName: wisecow-tls
+  rules:
+  - host: yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wisecow-service
+            port:
+              number: 80
+wisecow/
+├── app.py
+├── Dockerfile
+├── requirements.txt
+├── k8s/
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── ingress.yaml
+└── .github/
+    └── workflows/
+        └── ci-cd.yaml
+git add .
+git commit -m "Initial commit"
+git push origin main
